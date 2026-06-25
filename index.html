@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyber Zen Note</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&family=Noto+Serif+SC&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Inter', 'Noto Serif SC', sans-serif; color: rgba(255,255,255,0.8); }
+    .ui-element { opacity: 0.05; transition: opacity 0.6s ease; }
+    .ui-element:hover, .ui-element:focus-within { opacity: 1; }
+
+    #glCanvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+
+    /* Control Panel */
+    #controlPanel { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.5); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); border-top: none; border-radius: 0 0 16px 16px; padding: 8px 16px; min-width: 200px; }
+    #toggleBtn { background: none; border: none; color: rgba(255,255,255,0.5); font-size: 20px; cursor: pointer; display: flex; justify-content: center; }
+    #controls { display: none; flex-direction: column; gap: 12px; margin-top: 8px; }
+    #controls.open { display: flex; }
+    .control-row { display: flex; align-items: center; gap: 10px; }
+    .control-row label { font-size: 11px; color: rgba(255,255,255,0.5); min-width: 40px; }
+    .control-row input[type="range"] { flex: 1; height: 2px; -webkit-appearance: none; background: rgba(255,255,255,0.1); border-radius: 2px; }
+    .control-row input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.6); cursor: pointer; }
+    .control-row span { font-size: 10px; color: rgba(255,255,255,0.4); min-width: 28px; text-align: right; }
+    .toggle-row { display: flex; gap: 8px; }
+    .toggle-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); padding: 6px 12px; border-radius: 8px; font-size: 11px; cursor: pointer; transition: all 0.3s; }
+    .toggle-btn.active { background: rgba(255,255,255,0.2); color: rgba(255,255,255,0.9); }
+
+    /* Note Editor */
+    #editorContainer { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; width: min(680px, 90vw); height: 60vh; background: rgba(255,255,255,0.04); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; opacity: 0.08; transition: opacity 0.8s ease; display: flex; flex-direction: column; }
+    #editorContainer:hover, #editorContainer:focus-within { opacity: 1; }
+    #toolbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .tool-group { display: flex; gap: 8px; align-items: center; }
+    #fontSelect, #fontSize { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); padding: 4px 8px; border-radius: 6px; font-size: 12px; }
+    #fontSize { width: 50px; }
+    .color-dot { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); transition: transform 0.2s; }
+    .color-dot:hover { transform: scale(1.2); }
+    .color-dot.active { border: 2px solid rgba(255,255,255,0.8); }
+    .export-group { display: flex; gap: 6px; }
+    .export-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: all 0.3s; }
+    .export-btn:hover { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+    #noteTextarea { flex: 1; background: transparent; border: none; outline: none; color: rgba(255,255,255,0.85); padding: 16px; font-size: 16px; line-height: 1.8; resize: none; }
+    #noteTextarea::placeholder { color: rgba(255,255,255,0.3); }
+    #noteTextarea::-webkit-scrollbar { width: 4px; }
+    #noteTextarea::-webkit-scrollbar-track { background: transparent; }
+    #noteTextarea::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    /* Pomodoro Timer */
+    #pomodoro { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%); z-index: 10; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    #timerSvg { cursor: pointer; }
+    #timerSvg:hover circle.progress { stroke: rgba(255,255,255,0.6); }
+    #timerSvg:active { transform: scale(0.98); }
+    .progress { transition: stroke-dashoffset 0.5s linear, stroke 0.3s; }
+    #statusText { font-size: 10px; color: rgba(255,255,255,0.4); letter-spacing: 1px; }
+    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .flashing { animation: flash 0.3s ease 3; }
+  </style>
+</head>
+<body>
+  <canvas id="glCanvas"></canvas>
+
+  <div id="controlPanel" class="ui-element">
+    <button id="toggleBtn">⋯</button>
+    <div id="controls">
+      <div class="control-row">
+        <label>强度</label>
+        <input type="range" id="intensitySlider" min="0" max="1" step="0.01" value="0.7">
+        <span id="intensityVal">70</span>
+      </div>
+      <div class="control-row">
+        <label>模糊</label>
+        <input type="range" id="blurSlider" min="0" max="1" step="0.01" value="0.5">
+        <span id="blurVal">50</span>
+      </div>
+      <div class="control-row">
+        <label>白噪音</label>
+        <input type="range" id="noiseSlider" min="0" max="1" step="0.01" value="0">
+        <span id="noiseVal">0</span>
+      </div>
+      <div class="toggle-row">
+        <button id="soundToggle" class="toggle-btn">声音 OFF</button>
+        <button id="modeToggle" class="toggle-btn active">RAIN</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editorContainer">
+    <div id="toolbar">
+      <div class="tool-group">
+        <select id="fontSelect">
+          <option value="Inter">Inter</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Noto Serif SC">思源宋体</option>
+        </select>
+        <input type="number" id="fontSize" min="12" max="24" value="16">
+        <div class="color-dot active" data-color="rgba(255,255,255,0.85)" style="background: rgba(255,255,255,0.85);"></div>
+        <div class="color-dot" data-color="rgba(255,250,240,0.85)" style="background: rgba(255,250,240,0.85);"></div>
+        <div class="color-dot" data-color="rgba(200,230,240,0.85)" style="background: rgba(200,230,240,0.85);"></div>
+        <div class="color-dot" data-color="rgba(220,210,240,0.85)" style="background: rgba(220,210,240,0.85);"></div>
+      </div>
+      <div class="export-group">
+        <button class="export-btn" id="exportTxt">TXT</button>
+        <button class="export-btn" id="exportDoc">DOC</button>
+        <button class="export-btn" id="exportPdf">PDF</button>
+      </div>
+    </div>
+    <textarea id="noteTextarea" placeholder="静心，开始书写..."></textarea>
+  </div>
+
+  <div id="pomodoro" class="ui-element">
+    <svg id="timerSvg" viewBox="0 0 120 120" width="80" height="80">
+      <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2"/>
+      <circle class="progress" cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-dasharray="339.3" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+      <text x="60" y="65" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-size="14" font-family="'Inter', monospace" id="timerText">25:00</text>
+    </svg>
+    <span id="statusText">flow</span>
+  </div>
+
+  <script>
+    // ========== WebGL Shader Setup ==========
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
+    if (!gl) alert('WebGL not supported');
+
+    let currentMode = 'RAIN';
+    let uIntensity = 0.7;
+    let uBlur = 0.5;
+    let bgTexture = null;
+
+    const vertexShaderSource = `
+      attribute vec2 a_position;
+      void main() { gl_Position = vec4(a_position, 0.0, 1.0); }
+    `;
+
+    const rainShaderSource = `
+precision mediump float;
+uniform float iTime;
+uniform vec3 iResolution;
+uniform vec4 iMouse;
+uniform sampler2D iChannel0;
+uniform float uIntensity;
+uniform float uBlur;
+
+#define S(a, b, t) smoothstep(a, b, t)
+#define HAS_HEART
+#define USE_POST_PROCESSING
+
+vec3 N13(float p) {
+   vec3 p3 = fract(vec3(p) * vec3(.1031,.11369,.13787));
+   p3 += dot(p3, p3.yzx + 19.19);
+   return fract(vec3((p3.x + p3.y)*p3.z, (p3.x+p3.z)*p3.y, (p3.y+p3.z)*p3.x));
+}
+
+vec4 N14(float t) {
+    return fract(sin(t*vec4(123., 1024., 1456., 264.))*vec4(6547., 345., 8799., 1564.));
+}
+float N(float t) {
+    return fract(sin(t*12345.564)*7658.76);
+}
+
+float Saw(float b, float t) {
+    return S(0., b, t)*S(1., b, t);
+}
+
+vec2 DropLayer2(vec2 uv, float t) {
+    vec2 UV = uv;
+    uv.y += t*0.75;
+    vec2 a = vec2(6., 1.);
+    vec2 grid = a*2.;
+    vec2 id = floor(uv*grid);
+    float colShift = N(id.x);
+    uv.y += colShift;
+    id = floor(uv*grid);
+    vec3 n = N13(id.x*35.2+id.y*2376.1);
+    vec2 st = fract(uv*grid)-vec2(.5, 0);
+    float x = n.x-.5;
+    float y = UV.y*20.;
+    float wiggle = sin(y+sin(y));
+    x += wiggle*(.5-abs(x))*(n.z-.5);
+    x *= .7;
+    float ti = fract(t+n.z);
+    y = (Saw(.85, ti)-.5)*.9+.5;
+    vec2 p = vec2(x, y);
+    float d = length((st-p)*a.yx);
+    float mainDrop = S(.4, .0, d);
+    float r = sqrt(S(1., y, st.y));
+    float cd = abs(st.x-x);
+    float trail = S(.23*r, .15*r*r, cd);
+    float trailFront = S(-.02, .02, st.y-y);
+    trail *= trailFront*r*r;
+    y = UV.y;
+    float trail2 = S(.2*r, .0, cd);
+    float droplets = max(0., (sin(y*(1.-y)*120.)-st.y))*trail2*trailFront*n.z;
+    y = fract(y*10.)+(st.y-.5);
+    float dd = length(st-vec2(x, y));
+    droplets = S(.3, 0., dd);
+    float m = mainDrop+droplets*r*trailFront;
+    return vec2(m, trail);
+}
+
+float StaticDrops(vec2 uv, float t) {
+    uv *= 40.;
+    vec2 id = floor(uv);
+    uv = fract(uv)-.5;
+    vec3 n = N13(id.x*107.45+id.y*3543.654);
+    vec2 p = (n.xy-.5)*.7;
+    float d = length(uv-p);
+    float fade = Saw(.025, fract(t+n.z));
+    float c = S(.3, 0., d)*fract(n.z*10.)*fade;
+    return c;
+}
+
+vec2 Drops(vec2 uv, float t, float l0, float l1, float l2) {
+    float s = StaticDrops(uv, t)*l0;
+    vec2 m1 = DropLayer2(uv, t)*l1;
+    vec2 m2 = DropLayer2(uv*1.85, t)*l2;
+    float c = s+m1.x+m2.x;
+    c = S(.3, 1., c);
+    return vec2(c, max(m1.y*l0, m2.y*l1));
+}
+
+void main() {
+    vec2 fragCoord = gl_FragCoord.xy;
+    vec2 uv = (fragCoord.xy-.5*iResolution.xy) / iResolution.y;
+    vec2 UV = fragCoord.xy/iResolution.xy;
+    vec3 M = iMouse.xyz/iResolution.xyz;
+    float T = iTime+M.x*2.;
+
+    #ifdef HAS_HEART
+    T = mod(iTime, 102.);
+    T = mix(T, M.x*102., M.z>0.?1.:0.);
+    #endif
+
+    float t = T*.2;
+    float rainAmount = uIntensity;
+    float minBlur = 2.0 + uBlur * 2.0;
+    float maxBlur = 4.0 + uBlur * 3.0;
+
+    float story = 0.;
+    float heart = 0.;
+
+    #ifdef HAS_HEART
+    story = S(0., 70., T);
+    t = min(1., T/70.);
+    t = 1.-t;
+    t = (1.-t*t)*70.;
+    float zoom = mix(.3, 1.2, story);
+    uv *= zoom;
+    minBlur = (2.0 + uBlur * 2.0) + S(.5, 1., story)*3.;
+    maxBlur = (4.0 + uBlur * 3.0) + S(.5, 1., story)*1.5;
+    vec2 hv = uv-vec2(.0, -.1);
+    hv.x *= .5;
+    float s = S(110., 70., T);
+    hv.y -= sqrt(abs(hv.x))*.5*s;
+    heart = length(hv);
+    heart = S(.4*s, .2*s, heart)*s;
+    rainAmount = heart * uIntensity;
+    maxBlur -= heart;
+    uv *= 1.5;
+    t *= .25;
+    #else
+    float zoom = -cos(T*.2);
+    uv *= .7+zoom*.3;
+    #endif
+
+    UV = (UV-.5)*(.9+0.1)+.5;
+
+    float staticDrops = S(-.5, 1., rainAmount)*2.;
+    float layer1 = S(.25, .75, rainAmount);
+    float layer2 = S(.0, .5, rainAmount);
+
+    vec2 c = Drops(uv, t, staticDrops, layer1, layer2);
+    vec2 e = vec2(.001, 0.);
+    float cx = Drops(uv+e, t, staticDrops, layer1, layer2).x;
+    float cy = Drops(uv+e.yx, t, staticDrops, layer1, layer2).x;
+    vec2 n = vec2(cx-c.x, cy-c.x);
+
+    #ifdef HAS_HEART
+    n *= 1.-S(60., 85., T);
+    c.y *= 1.-S(80., 100., T)*.8;
+    #endif
+
+    float focus = mix(maxBlur-c.y, minBlur, S(.1, .2, c.x));
+    vec3 col = texture2D(iChannel0, UV+n).rgb;
+
+    #ifdef USE_POST_PROCESSING
+    t = (T+3.)*.5;
+    float colFade = sin(t*.2)*.5+.5+story;
+    col *= mix(vec3(1.), vec3(.8, .9, 1.3), colFade);
+    float fade = S(0., 10., T);
+    float lightning = sin(t*sin(t*10.));
+    lightning *= pow(max(0., sin(t+sin(t))), 10.);
+    col *= 1.+lightning*fade*mix(1., .1, story*story);
+    col *= 1.-dot(UV-=.5, UV);
+
+    #ifdef HAS_HEART
+    col = mix(pow(col, vec3(1.2)), col, heart);
+    fade *= S(102., 97., T);
+    #endif
+
+    col *= fade;
+    #endif
+
+    gl_FragColor = vec4(col, 1.);
+}
+`;
+
+    const snowShaderSource = `
+precision mediump float;
+uniform float iTime;
+uniform vec3 iResolution;
+uniform vec4 iMouse;
+uniform float uIntensity;
+uniform float uBlur;
+
+#define S(a, b, t) smoothstep(a, b, t)
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float noise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p);
+  f = f*f*(3.-2.*f);
+  return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y);
+}
+
+void main() {
+  int layers = int(20.0 + uIntensity * 180.0);
+  vec2 uv = gl_FragCoord.xy/iResolution.xy;
+  float aspect = iResolution.x/iResolution.y;
+  vec3 col = vec3(0.0);
+  float dof = uBlur * 8.0 * sin(iTime * 0.1);
+  const mat3 p = mat3(13.323122,23.5112,21.71123,21.1212,28.7312,11.9312,21.8112,14.7212,61.3934);
+  vec2 snowUv = uv; snowUv.x *= aspect;
+  vec3 acc = vec3(0.0);
+  for (int i=0; i<200; i++) {
+    if(i >= layers) break;
+    float fi = float(i);
+    vec2 q = snowUv*(1.+fi*0.01);
+    q += vec2(q.y*(0.3*mod(fi*7.238917, 1.0)-0.15), 0.6*iTime/(1.+fi*0.02));
+    vec3 n = vec3(floor(q),31.189+fi); vec3 m = floor(n)*0.00001+fract(n);
+    vec3 mp = (31415.9+m)/fract(p*m); vec3 r = fract(mp);
+    vec2 s = abs(mod(q,1.)-0.5+0.9*r.xy-0.45);
+    s += 0.01*abs(2.*fract(10.*q.yx)-1.);
+    float d = 0.6*max(s.x-s.y,s.x+s.y)+max(s.x,s.y)-0.01;
+    float edge = 0.005+0.04*min(0.5*abs(fi-5.-dof),1.);
+    acc += vec3(smoothstep(edge,-edge,d)*(r.x/(1.+0.02*fi)));
+  }
+  vec3 snowCol = mix(vec3(0.95,0.97,1.0), vec3(1.0), 0.5);
+  col = snowCol * acc.r * 0.3;
+  float vignette = 1.-length(uv-0.5)*0.5;
+  col *= vignette;
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+    let currentProgram = null;
+    let rainProgram = null;
+    let snowProgram = null;
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        return null;
+      }
+      return shader;
+    }
+
+    function createProgram(fragSource) {
+      const vert = compileShader(gl.VERTEX_SHADER, vertexShaderSource);
+      const frag = compileShader(gl.FRAGMENT_SHADER, fragSource);
+      if (!vert || !frag) return null;
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vert);
+      gl.attachShader(prog, frag);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(prog));
+        return null;
+      }
+      return prog;
+    }
+
+    function loadBgTexture() {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = "https://picsum.photos/1920/1080?grayscale&blur=2";
+      img.onload = () => {
+        bgTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, bgTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      };
+    }
+
+    function initShaders() {
+      rainProgram = createProgram(rainShaderSource);
+      snowProgram = createProgram(snowShaderSource);
+      currentProgram = rainProgram;
+      loadBgTexture();
+    }
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    let startTime = performance.now();
+    function render() {
+      if (!currentProgram) { requestAnimationFrame(render); return; }
+      gl.useProgram(currentProgram);
+      const posLoc = gl.getAttribLocation(currentProgram, 'a_position');
+      const posBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+      const time = (performance.now() - startTime) / 1000;
+      gl.uniform1f(gl.getUniformLocation(currentProgram, 'iTime'), time);
+      gl.uniform3f(gl.getUniformLocation(currentProgram, 'iResolution'), canvas.width, canvas.height, 1);
+      gl.uniform1f(gl.getUniformLocation(currentProgram, 'uIntensity'), uIntensity);
+      gl.uniform1f(gl.getUniformLocation(currentProgram, 'uBlur'), uBlur);
+
+      if (currentMode === 'RAIN' && bgTexture) {
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, bgTexture);
+        gl.uniform1i(gl.getUniformLocation(currentProgram, 'iChannel0'), 0);
+      }
+
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    initShaders();
+    render();
+
+    // ========== Audio ==========
+    let audioCtx = null, gainNode = null, audioStarted = false;
+    function initAudio() {
+      if (audioStarted) return;
+      audioCtx = new AudioContext();
+      const bufSize = audioCtx.sampleRate * 2;
+      const buf = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0;
+      src.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      src.start();
+      audioStarted = true;
+    }
+
+    // ========== Controls ==========
+    const toggleBtn = document.getElementById('toggleBtn');
+    const controls = document.getElementById('controls');
+    toggleBtn.addEventListener('click', () => controls.classList.toggle('open'));
+
+    const intensitySlider = document.getElementById('intensitySlider');
+    const intensityVal = document.getElementById('intensityVal');
+    intensitySlider.addEventListener('input', (e) => {
+      uIntensity = parseFloat(e.target.value);
+      intensityVal.textContent = Math.round(uIntensity * 100);
+    });
+
+    const blurSlider = document.getElementById('blurSlider');
+    const blurVal = document.getElementById('blurVal');
+    blurSlider.addEventListener('input', (e) => {
+      uBlur = parseFloat(e.target.value);
+      blurVal.textContent = Math.round(uBlur * 100);
+    });
+
+    const noiseSlider = document.getElementById('noiseSlider');
+    const noiseVal = document.getElementById('noiseVal');
+    noiseSlider.addEventListener('input', (e) => {
+      if (gainNode) gainNode.gain.value = parseFloat(e.target.value);
+      noiseVal.textContent = Math.round(parseFloat(e.target.value) * 100);
+    });
+
+    const soundToggle = document.getElementById('soundToggle');
+    soundToggle.addEventListener('click', () => {
+      initAudio();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const vol = gainNode.gain.value > 0 ? 0 : parseFloat(noiseSlider.value) || 0.3;
+      gainNode.gain.value = vol;
+      noiseSlider.value = vol;
+      noiseVal.textContent = Math.round(vol * 100);
+      soundToggle.textContent = vol > 0 ? '声音 ON' : '声音 OFF';
+      soundToggle.classList.toggle('active', vol > 0);
+    });
+
+    const modeToggle = document.getElementById('modeToggle');
+    modeToggle.addEventListener('click', () => {
+      currentMode = currentMode === 'RAIN' ? 'SNOW' : 'RAIN';
+      currentProgram = currentMode === 'RAIN' ? rainProgram : snowProgram;
+      modeToggle.textContent = currentMode;
+      modeToggle.classList.toggle('active', currentMode === 'RAIN');
+    });
+
+    // ========== Editor ==========
+    const textarea = document.getElementById('noteTextarea');
+    const fontSelect = document.getElementById('fontSelect');
+    const fontSize = document.getElementById('fontSize');
+    const colorDots = document.querySelectorAll('.color-dot');
+
+    textarea.value = localStorage.getItem('zenote_content') || '';
+    fontSelect.value = localStorage.getItem('zenote_font') || 'Inter';
+    fontSize.value = localStorage.getItem('zenote_size') || '16';
+    const savedColor = localStorage.getItem('zenote_color') || 'rgba(255,255,255,0.85)';
+    textarea.style.fontFamily = fontSelect.value;
+    textarea.style.fontSize = fontSize.value + 'px';
+    textarea.style.color = savedColor;
+    colorDots.forEach(dot => {
+      dot.classList.toggle('active', dot.dataset.color === savedColor);
+    });
+
+    textarea.addEventListener('input', () => {
+      localStorage.setItem('zenote_content', textarea.value);
+    });
+    fontSelect.addEventListener('change', (e) => {
+      textarea.style.fontFamily = e.target.value;
+      localStorage.setItem('zenote_font', e.target.value);
+    });
+    fontSize.addEventListener('input', (e) => {
+      textarea.style.fontSize = e.target.value + 'px';
+      localStorage.setItem('zenote_size', e.target.value);
+    });
+    colorDots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        colorDots.forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+        textarea.style.color = dot.dataset.color;
+        localStorage.setItem('zenote_color', dot.dataset.color);
+      });
+    });
+
+    // Export
+    document.getElementById('exportTxt').addEventListener('click', () => {
+      const blob = new Blob([textarea.value], {type: 'text/plain'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = 'zenote.txt'; a.click();
+    });
+    document.getElementById('exportDoc').addEventListener('click', () => {
+      const content = `<html><body><p>${textarea.value.replace(/\n/g,'</p><p>')}</p></body></html>`;
+      const blob = new Blob([content], {type: 'application/msword'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = 'zenote.doc'; a.click();
+    });
+    document.getElementById('exportPdf').addEventListener('click', () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const lines = doc.splitTextToSize(textarea.value, 180);
+      doc.text(lines, 15, 15);
+      doc.save('zenote.pdf');
+    });
+
+    // ========== Pomodoro ==========
+    let timerMinutes = 25, remaining = timerMinutes * 60, total = remaining, running = false, timerInterval = null;
+    const timerText = document.getElementById('timerText');
+    const progressRing = document.querySelector('.progress');
+    const statusText = document.getElementById('statusText');
+    const timerSvg = document.getElementById('timerSvg');
+
+    function updateTimer() {
+      const m = Math.floor(remaining / 60), s = remaining % 60;
+      timerText.textContent = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+      const offset = 339.3 * (1 - remaining / total);
+      progressRing.style.strokeDashoffset = offset;
+    }
+
+    function startTimer() {
+      if (running) { running = false; clearInterval(timerInterval); statusText.textContent = 'paused'; }
+      else {
+        running = true; statusText.textContent = 'focus';
+        timerInterval = setInterval(() => {
+          remaining--;
+          updateTimer();
+          if (remaining <= 0) {
+            clearInterval(timerInterval);
+            running = false;
+            progressRing.classList.add('flashing');
+            setTimeout(() => { progressRing.classList.remove('flashing'); remaining = total; updateTimer(); statusText.textContent = 'rest'; }, 1000);
+          }
+        }, 1000);
+      }
+    }
+
+    function resetTimer() { clearInterval(timerInterval); running = false; remaining = total; updateTimer(); statusText.textContent = 'flow'; }
+
+    timerSvg.addEventListener('click', startTimer);
+    let pressTimer;
+    timerSvg.addEventListener('mousedown', () => { pressTimer = setTimeout(resetTimer, 800); });
+    timerSvg.addEventListener('mouseup', () => clearTimeout(pressTimer));
+    timerSvg.addEventListener('mouseleave', () => clearTimeout(pressTimer));
+
+    timerSvg.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      timerMinutes = Math.max(1, Math.min(60, timerMinutes + (e.deltaY > 0 ? -1 : 1)));
+      total = timerMinutes * 60;
+      remaining = running ? remaining : total;
+      updateTimer();
+    });
+    updateTimer();
+  </script>
+</body>
+</html>
