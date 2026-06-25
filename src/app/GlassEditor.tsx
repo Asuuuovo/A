@@ -19,30 +19,30 @@ const fonts = [
 
 // 段落格式选项
 const paragraphFormats = [
-  { label: "首行缩进", value: "text-indent", options: [
+  { label: "首行缩进", value: "textIndent", options: [
     { label: "无", value: "0em" },
     { label: "2字符", value: "2em" },
     { label: "4字符", value: "4em" },
   ]},
-  { label: "行间距", value: "line-height", options: [
+  { label: "行间距", value: "lineHeight", options: [
     { label: "1.0", value: "1.0" },
     { label: "1.5", value: "1.5" },
     { label: "2.0", value: "2.0" },
     { label: "2.5", value: "2.5" },
   ]},
-  { label: "段前距", value: "margin-top", options: [
+  { label: "段前距", value: "marginTop", options: [
     { label: "0", value: "0" },
     { label: "0.5行", value: "0.5em" },
     { label: "1行", value: "1em" },
     { label: "2行", value: "2em" },
   ]},
-  { label: "段后距", value: "margin-bottom", options: [
+  { label: "段后距", value: "marginBottom", options: [
     { label: "0", value: "0" },
     { label: "0.5行", value: "0.5em" },
     { label: "1行", value: "1em" },
     { label: "2行", value: "2em" },
   ]},
-  { label: "对齐", value: "text-align", options: [
+  { label: "对齐", value: "textAlign", options: [
     { label: "左", value: "left" },
     { label: "居中", value: "center" },
     { label: "右", value: "right" },
@@ -109,22 +109,30 @@ function HourglassIcon() {
   );
 }
 
+// 段落格式类型
+interface ParagraphFormat {
+  textIndent: string;
+  lineHeight: string;
+  marginTop: string;
+  marginBottom: string;
+  textAlign: string;
+}
+
 // 文字蒸发覆盖层 - 绝对定位，原地蒸发
-function TextEvaporateOverlay({ text, font, paragraphFormat }: { text: string; font: string; paragraphFormat: React.CSSProperties }) {
+function TextEvaporateOverlay({ text, font, paragraphFormat }: { text: string; font: string; paragraphFormat: ParagraphFormat }) {
   const lines = text.split('\n');
-  const lineHeight = paragraphFormat.lineHeight || '1.8';
   const fontSize = 18;
 
   return (
     <div
       className="absolute inset-0 p-8 pointer-events-none overflow-hidden"
-      style={{ fontFamily: font, fontSize: `${fontSize}px`, lineHeight }}
+      style={{ fontFamily: font, fontSize: `${fontSize}px`, lineHeight: paragraphFormat.lineHeight }}
     >
       {lines.map((line, lineIndex) => (
         <div
           key={lineIndex}
           className="whitespace-pre-wrap"
-          style={{ height: fontSize * parseFloat(String(lineHeight)) }}
+          style={{ height: fontSize * parseFloat(paragraphFormat.lineHeight) }}
         >
           {line.split('').map((char, charIndex) => (
             <span
@@ -146,12 +154,12 @@ function TextEvaporateOverlay({ text, font, paragraphFormat }: { text: string; f
 
 export default function GlassEditor({ value, onChange, placeholder = "小喧 is watching you...", mode, setMode }: GlassEditorProps) {
   const [font, setFont] = useState(fonts[0].value);
-  const [paragraphFormat, setParagraphFormat] = useState({
-    "text-indent": "0em",
-    "line-height": "1.8",
-    "margin-top": "0",
-    "margin-bottom": "0",
-    "text-align": "left",
+  const [paragraphFormat, setParagraphFormat] = useState<ParagraphFormat>({
+    textIndent: "0em",
+    lineHeight: "1.8",
+    marginTop: "0",
+    marginBottom: "0",
+    textAlign: "left",
   });
   const [isHovered, setIsHovered] = useState(false);
   const [showModes, setShowModes] = useState(false);
@@ -178,7 +186,7 @@ export default function GlassEditor({ value, onChange, placeholder = "小喧 is 
     if (textareaRef.current) {
       textareaRef.current.style.fontFamily = font;
       Object.entries(paragraphFormat).forEach(([prop, val]) => {
-        textareaRef.current!.style.setProperty(prop, val);
+        (textareaRef.current!.style as any)[prop] = val;
       });
     }
   }, [font, paragraphFormat]);
@@ -345,7 +353,7 @@ export default function GlassEditor({ value, onChange, placeholder = "小喧 is 
                                 setParagraphFormat((prev) => ({ ...prev, [fmt.value]: opt.value }));
                               }}
                               className={`px-2 py-1 rounded text-xs transition-all ${
-                                paragraphFormat[fmt.value as keyof typeof paragraphFormat] === opt.value
+                                paragraphFormat[fmt.value as keyof ParagraphFormat] === opt.value
                                   ? 'bg-white/25 text-white'
                                   : 'text-white/60 hover:bg-white/15 hover:text-white'
                               }`}
