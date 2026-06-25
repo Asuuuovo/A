@@ -267,7 +267,7 @@ export default function GlassEditor({ value, onChange, placeholder = "小喧 is 
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             className={`w-full h-[50vh] bg-transparent border-none text-white placeholder-white/30 resize-none focus:outline-none ${isEvaporating ? 'opacity-0' : ''}`}
-            style={{ fontFamily: font, fontSize: "18px", ...paragraphFormat }}
+            style={{ fontFamily: font, fontSize: "18px", textIndent: paragraphFormat.textIndent, lineHeight: paragraphFormat.lineHeight, marginTop: paragraphFormat.marginTop, marginBottom: paragraphFormat.marginBottom, textAlign: paragraphFormat.textAlign as React.CSSProperties['textAlign'] }}
           />
         </div>
 
