@@ -124,7 +124,7 @@ function TextEvaporateOverlay({ text, font, paragraphFormat }: { text: string; f
         <div
           key={lineIndex}
           className="whitespace-pre-wrap"
-          style={{ height: fontSize * parseFloat(lineHeight) }}
+          style={{ height: fontSize * parseFloat(String(lineHeight)) }}
         >
           {line.split('').map((char, charIndex) => (
             <span
